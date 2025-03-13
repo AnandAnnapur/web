@@ -11,41 +11,7 @@ from .models import Person
 from .serializers import PersonSerializer
 from .utils import get_tokens_for_user
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def person_login(request):
-    """
-    Authenticate person using email and phone number and return JWT tokens.
-    """
-    email = request.data.get('email')
-    phone = request.data.get('phone')
 
-    if not email or not phone:
-        return Response({'error': 'Email and phone number are required'}, 
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        # Find the Person by email and phone
-        person = Person.objects.get(email=email, phone=phone)
-
-        # Ensure a User object exists for this person
-        user, created = User.objects.get_or_create(
-            username=person.email,
-            defaults={'email': person.email, 'password': make_password(get_random_string(12))}
-        )
-
-        # Generate JWT tokens for the authenticated user
-        tokens = get_tokens_for_user(user)
-
-        return Response({
-            'refresh': tokens['refresh'],
-            'access': tokens['access'],
-            'person_id': person.id,
-            'email': person.email
-        }, status=status.HTTP_200_OK)
-
-    except Person.DoesNotExist:
-        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
     
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -76,30 +42,33 @@ def create_person(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([AllowAny])
 def person_login(request):
     """
-    Authenticate person using email and phone number and return JWT tokens.
+    Authenticate a person using email and phone number via GET request
+    and return JWT tokens.
     """
-    email = request.data.get('email')
-    phone = request.data.get('phone')
+    email = request.query_params.get('email')
+    phone_no = request.query_params.get('phone_no')  # Using query params for GET
 
-    if not email or not phone:
-        return Response({'error': 'Email and phone number are required'}, 
-                        status=status.HTTP_400_BAD_REQUEST)
+    if not email or not phone_no:
+        return Response(
+            {'error': 'Both email and phone number are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
-        # Find the Person by email and phone
-        person = Person.objects.get(email=email, phone=phone)
+        # Find the Person by email and phone number
+        person = get_object_or_404(Person, email=email, phone=phone_no)
 
-        # Ensure a User object exists for this person
+        # Find or create a corresponding User account
         user, created = User.objects.get_or_create(
             username=person.email,
             defaults={'email': person.email, 'password': make_password(get_random_string(12))}
         )
 
-        # Generate JWT tokens for the authenticated user
+        # Generate JWT tokens for the User
         tokens = get_tokens_for_user(user)
 
         return Response({
@@ -107,10 +76,9 @@ def person_login(request):
             'access': tokens['access'],
             'person_id': person.id,
             'email': person.email
-        }, status=status.HTTP_200_OK)
-
-    except Person.DoesNotExist:
-        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
 
 
 @api_view(['GET'])
